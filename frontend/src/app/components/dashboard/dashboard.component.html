@@ -1,0 +1,96 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="subtitle">Welcome back — here's what's happening today.</p>
+    </div>
+    <div class="live-badge" *ngIf="true">
+      <span class="dot"></span> Live
+    </div>
+  </div>
+
+  <div class="card-grid" *ngIf="summary">
+    <div class="stat-card">
+      <div class="stat-icon blue">
+        <span class="material-icons">shopping_cart</span>
+      </div>
+      <div class="stat-info">
+        <h3>{{ summary.totalOrders }}</h3>
+        <p>Total Orders</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange">
+        <span class="material-icons">hourglass_empty</span>
+      </div>
+      <div class="stat-info">
+        <h3>{{ summary.pendingOrders }}</h3>
+        <p>Pending</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">
+        <span class="material-icons">check_circle</span>
+      </div>
+      <div class="stat-info">
+        <h3>{{ summary.deliveredOrders }}</h3>
+        <p>Delivered</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon blue">
+        <span class="material-icons">attach_money</span>
+      </div>
+      <div class="stat-info">
+        <h3>{{ summary.totalRevenue | currency }}</h3>
+        <p>Total Revenue</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-container" style="flex:2">
+      <h3>Monthly Revenue</h3>
+      <canvas baseChart [data]="{ labels: revenueChartLabels, datasets: revenueChartData }"
+        [options]="revenueChartOptions" type="bar"></canvas>
+    </div>
+    <div class="chart-container" style="flex:1">
+      <h3>Orders by Status</h3>
+      <canvas baseChart [data]="{ labels: statusChartLabels, datasets: statusChartData }"
+        type="doughnut"></canvas>
+    </div>
+  </div>
+
+  <div class="data-table-container" style="margin-top:24px">
+    <div class="section-header">
+      <h2>Recent Orders</h2>
+      <a routerLink="/orders" mat-button color="primary">View All</a>
+    </div>
+    <mat-table [dataSource]="recentOrders">
+      <ng-container matColumnDef="orderNumber">
+        <mat-header-cell *matHeaderCellDef>Order #</mat-header-cell>
+        <mat-cell *matCellDef="let o">{{ o.orderNumber }}</mat-cell>
+      </ng-container>
+      <ng-container matColumnDef="customer">
+        <mat-header-cell *matHeaderCellDef>Customer</mat-header-cell>
+        <mat-cell *matCellDef="let o">{{ o.customer.name }}</mat-cell>
+      </ng-container>
+      <ng-container matColumnDef="status">
+        <mat-header-cell *matHeaderCellDef>Status</mat-header-cell>
+        <mat-cell *matCellDef="let o">
+          <span class="status-badge {{ o.status }}">{{ o.status }}</span>
+        </mat-cell>
+      </ng-container>
+      <ng-container matColumnDef="total">
+        <mat-header-cell *matHeaderCellDef>Total</mat-header-cell>
+        <mat-cell *matCellDef="let o">{{ o.totalAmount | currency }}</mat-cell>
+      </ng-container>
+      <ng-container matColumnDef="date">
+        <mat-header-cell *matHeaderCellDef>Date</mat-header-cell>
+        <mat-cell *matCellDef="let o">{{ o.createdAt | date:'mediumDate' }}</mat-cell>
+      </ng-container>
+      <mat-header-row *matHeaderRowDef="['orderNumber','customer','status','total','date']"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: ['orderNumber','customer','status','total','date']"></mat-row>
+    </mat-table>
+  </div>
+</div>
