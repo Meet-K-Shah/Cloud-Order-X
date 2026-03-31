@@ -1,0 +1,210 @@
+---
+# CloudOrderX — Full Deployment Playbook
+# Usage: ansible-playbook -i inventory.ini playbook.yml --tags deploy
+#        ansible-playbook -i inventory.ini playbook.yml --tags monitoring
+
+- name: "[ Bootstrap ] Install system dependencies on all hosts"
+  hosts: all
+  become: true
+  gather_facts: true
+  tags: [bootstrap, always]
+
+  tasks:
+    - name: Update package cache (RHEL/Amazon Linux)
+      ansible.builtin.yum:
+        update_cache: true
+      when: ansible_os_family == "RedHat"
+
+    - name: Update package cache (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install common packages
+      ansible.builtin.package:
+        name:
+          - git
+          - curl
+          - unzip
+          - jq
+          - python3
+          - python3-pip
+        state: present
+
+    - name: Install Docker
+      ansible.builtin.shell: |
+        curl -fsSL https://get.docker.com | sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Start and enable Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ansible user to docker group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
+    - name: Install Docker Compose
+      ansible.builtin.get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Install AWS CLI v2
+      ansible.builtin.shell: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+        unzip -q /tmp/awscliv2.zip -d /tmp
+        /tmp/aws/install --update
+      args:
+        creates: /usr/local/bin/aws
+
+
+- name: "[ Deploy ] Deploy CloudOrderX application stack"
+  hosts: app_servers
+  become: true
+  tags: [deploy]
+
+  vars:
+    deploy_dir: "{{ project_dir }}"
+
+  tasks:
+    - name: Create project directory
+      ansible.builtin.file:
+        path: "{{ deploy_dir }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: '0755'
+
+    - name: Copy docker-compose.yml
+      ansible.builtin.copy:
+        src: ../../docker-compose.yml
+        dest: "{{ deploy_dir }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        mode: '0644'
+
+    - name: Write .env file from Ansible vars
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: "{{ deploy_dir }}/.env"
+        owner: "{{ ansible_user }}"
+        mode: '0600'
+
+    - name: Authenticate Docker to ECR
+      ansible.builtin.shell: |
+        aws ecr get-login-password --region us-east-1           | docker login --username AWS --password-stdin {{ docker_registry }}
+      changed_when: false
+
+    - name: Pull latest images
+      ansible.builtin.shell: |
+        cd {{ deploy_dir }} && docker-compose pull
+      register: pull_result
+      changed_when: "'Pull complete' in pull_result.stdout"
+
+    - name: Deploy stack (rolling restart)
+      ansible.builtin.shell: |
+        cd {{ deploy_dir }} &&         docker-compose up -d --remove-orphans --no-build
+      register: deploy_result
+
+    - name: Wait for backend health check
+      ansible.builtin.uri:
+        url: "http://localhost:{{ app_port }}/actuator/health"
+        status_code: 200
+        timeout: 10
+      retries: 12
+      delay: 10
+      register: health_check
+      until: health_check.status == 200
+
+    - name: Print deployment result
+      ansible.builtin.debug:
+        msg: "✅ CloudOrderX deployed successfully on {{ inventory_hostname }}"
+
+    - name: Clean up old Docker images
+      ansible.builtin.shell: docker image prune -f
+      changed_when: false
+
+
+- name: "[ Monitoring ] Deploy Prometheus + Grafana"
+  hosts: monitoring_servers
+  become: true
+  tags: [monitoring]
+
+  tasks:
+    - name: Create monitoring directory
+      ansible.builtin.file:
+        path: "{{ project_dir }}/monitoring"
+        state: directory
+        mode: '0755'
+
+    - name: Copy Prometheus config
+      ansible.builtin.copy:
+        src: ../../monitoring/prometheus.yml
+        dest: "{{ project_dir }}/monitoring/prometheus.yml"
+        mode: '0644'
+
+    - name: Copy Prometheus alert rules
+      ansible.builtin.copy:
+        src: ../../monitoring/rules/
+        dest: "{{ project_dir }}/monitoring/rules/"
+        mode: '0644'
+
+    - name: Copy Grafana dashboards
+      ansible.builtin.copy:
+        src: ../../monitoring/grafana/
+        dest: "{{ project_dir }}/monitoring/grafana/"
+        mode: '0644'
+
+    - name: Start monitoring stack
+      ansible.builtin.shell: |
+        cd {{ project_dir }} &&         docker-compose -f docker-compose.monitoring.yml up -d
+      args:
+        chdir: "{{ project_dir }}"
+
+    - name: Wait for Grafana
+      ansible.builtin.uri:
+        url: "http://localhost:{{ grafana_port }}/api/health"
+        status_code: 200
+      retries: 10
+      delay: 6
+      register: grafana_health
+      until: grafana_health.status == 200
+
+    - name: Print monitoring URLs
+      ansible.builtin.debug:
+        msg:
+          - "📊 Grafana:    http://{{ inventory_hostname }}:{{ grafana_port }}"
+          - "🔍 Prometheus: http://{{ inventory_hostname }}:{{ prometheus_port }}"
+
+
+- name: "[ Rollback ] Rollback to previous image tag"
+  hosts: app_servers
+  become: true
+  tags: [rollback]
+
+  tasks:
+    - name: Set previous image tag
+      ansible.builtin.set_fact:
+        image_tag: "{{ rollback_tag | default('previous') }}"
+
+    - name: Pull rollback images
+      ansible.builtin.shell: |
+        cd {{ project_dir }} &&         IMAGE_TAG={{ image_tag }} docker-compose pull
+
+    - name: Apply rollback
+      ansible.builtin.shell: |
+        cd {{ project_dir }} &&         IMAGE_TAG={{ image_tag }} docker-compose up -d --no-build
+
+    - name: Validate rollback health
+      ansible.builtin.uri:
+        url: "http://localhost:{{ app_port }}/actuator/health"
+        status_code: 200
+      retries: 6
+      delay: 10
+      until: result.status == 200
+      register: result
