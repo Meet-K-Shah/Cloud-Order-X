@@ -1,0 +1,45 @@
+<mat-sidenav-container class="app-container">
+  <mat-sidenav #sidenav [opened]="sidenavOpened" mode="side" class="sidenav">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="CloudOrderX logo">
+        <rect width="28" height="28" rx="8" fill="#6366f1"/>
+        <path d="M7 14h14M7 10h14M7 18h9" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="22" cy="18" r="3" fill="white"/>
+      </svg>
+      <span class="brand-name">CloudOrderX</span>
+    </div>
+
+    <nav class="nav-list">
+      <a class="nav-item" *ngFor="let item of navItems"
+        [routerLink]="item.route"
+        [class.active]="isActive(item.route)">
+        <mat-icon>{{ item.icon }}</mat-icon>
+        <span>{{ item.label }}</span>
+      </a>
+    </nav>
+
+    <div class="sidenav-footer">
+      <div class="user-chip">
+        <div class="avatar">A</div>
+        <div class="user-info">
+          <span class="user-name">Admin User</span>
+          <span class="user-role">Administrator</span>
+        </div>
+      </div>
+    </div>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="content-area">
+    <header class="app-header">
+      <button mat-icon-button (click)="sidenavOpened = !sidenavOpened">
+        <mat-icon>{{ sidenavOpened ? 'menu_open' : 'menu' }}</mat-icon>
+      </button>
+      <div class="header-right">
+        <button mat-icon-button matTooltip="Notifications">
+          <mat-icon matBadge="3" matBadgeColor="warn">notifications</mat-icon>
+        </button>
+      </div>
+    </header>
+    <router-outlet></router-outlet>
+  </mat-sidenav-content>
+</mat-sidenav-container>
