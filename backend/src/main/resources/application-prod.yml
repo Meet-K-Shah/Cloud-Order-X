@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:cloudorderx}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USER:cloudorderx}
+    password: ${DB_PASS:changeme}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+
+  h2:
+    console:
+      enabled: false
+
+logging:
+  level:
+    com.cloudorderx: INFO
