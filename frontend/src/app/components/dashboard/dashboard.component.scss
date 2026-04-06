@@ -1,0 +1,32 @@
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+
+  h1 { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .subtitle { color: #64748b; font-size: 13px; margin-top: 4px; }
+}
+
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: #dcfce7; color: #15803d;
+  padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #16a34a; animation: pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.charts-row {
+  display: flex; gap: 16px; flex-wrap: wrap;
+
+  .chart-container { flex: 1; min-width: 280px; }
+  h3 { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 16px; }
+}
