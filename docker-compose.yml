@@ -1,0 +1,188 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CloudOrderX — Full Stack Docker Compose
+# Services: backend, frontend, etl, reporting, notifications, postgres, prometheus, grafana
+#
+# Quick start:
+#   docker compose up -d
+#   open http://localhost:4200      ← Angular frontend
+#   open http://localhost:8080      ← Spring Boot API
+#   open http://localhost:3000      ← Grafana (admin/admin)
+#   open http://localhost:9090      ← Prometheus
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: cloudorderx-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       cloudorderx
+      POSTGRES_USER:     cloudorderx
+      POSTGRES_PASSWORD: ${DB_PASS:-cloudorderx_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudorderx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── Spring Boot Backend ───────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE:-cloudorderx/backend:latest}
+    container_name: cloudorderx-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE:    prod
+      DB_HOST:                   postgres
+      DB_PORT:                   5432
+      DB_NAME:                   cloudorderx
+      DB_USER:                   cloudorderx
+      DB_PASS:                   ${DB_PASS:-cloudorderx_dev}
+      APP_JWT_SECRET:            ${JWT_SECRET:-dev-jwt-secret-minimum-256-bits-long}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health | grep UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── Angular Frontend ──────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ${FRONTEND_IMAGE:-cloudorderx/frontend:latest}
+    container_name: cloudorderx-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "4200:80"
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── ETL Microservice ──────────────────────────────────────────────────────
+  etl-service:
+    build:
+      context: ./microservices/etl-service
+      dockerfile: Dockerfile
+    container_name: cloudorderx-etl
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      SOURCE_API_URL:      http://backend:8080/api/v1
+      DB_URL:              postgresql+psycopg2://cloudorderx:${DB_PASS:-cloudorderx_dev}@postgres:5432/cloudorderx
+      ETL_INTERVAL_MINUTES: 15
+    ports:
+      - "8001:8001"
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── Reporting Microservice ────────────────────────────────────────────────
+  reporting-service:
+    build:
+      context: ./microservices/reporting-service
+      dockerfile: Dockerfile
+    container_name: cloudorderx-reporting
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      SOURCE_API_URL: http://backend:8080/api/v1
+    ports:
+      - "8002:8002"
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── Notification Microservice ─────────────────────────────────────────────
+  notification-service:
+    build:
+      context: ./microservices/notification-service
+      dockerfile: Dockerfile
+    container_name: cloudorderx-notifications
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: cloudorderx-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: cloudorderx-grafana
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:-admin}
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/cloudorderx-dashboard.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks: [cloudorderx-net]
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  cloudorderx-net:
+    driver: bridge
