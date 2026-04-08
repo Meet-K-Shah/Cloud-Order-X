@@ -1,0 +1,95 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1>Orders</h1>
+      <p class="subtitle">Manage and track all customer orders</p>
+    </div>
+    <button mat-raised-button color="primary" routerLink="/orders/new">
+      <mat-icon>add</mat-icon> New Order
+    </button>
+  </div>
+
+  <div class="filters-bar">
+    <mat-form-field appearance="outline" class="search-field">
+      <mat-label>Search orders…</mat-label>
+      <mat-icon matPrefix>search</mat-icon>
+      <input matInput (keyup)="applyFilter($event)" placeholder="Customer, order #, status…">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Status</mat-label>
+      <mat-select [(ngModel)]="statusFilter" (selectionChange)="loadOrders()">
+        <mat-option value="">All Statuses</mat-option>
+        <mat-option *ngFor="let s of statuses" [value]="s">{{ s }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <div class="data-table-container">
+    <div *ngIf="loading" class="loading-overlay">
+      <mat-spinner diameter="40"></mat-spinner>
+    </div>
+
+    <mat-table [dataSource]="dataSource" matSort>
+      <ng-container matColumnDef="orderNumber">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Order #</mat-header-cell>
+        <mat-cell *matCellDef="let o">
+          <a [routerLink]="['/tracking', o.orderNumber]" class="order-link">{{ o.orderNumber }}</a>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="customer">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Customer</mat-header-cell>
+        <mat-cell *matCellDef="let o">
+          <div class="customer-cell">
+            <span class="name">{{ o.customer.name }}</span>
+            <span class="email">{{ o.customer.email }}</span>
+          </div>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Status</mat-header-cell>
+        <mat-cell *matCellDef="let o">
+          <mat-select [(ngModel)]="o.status" (selectionChange)="updateStatus(o, o.status)"
+            class="status-select {{ o.status }}">
+            <mat-option *ngFor="let s of statuses" [value]="s">{{ s }}</mat-option>
+          </mat-select>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="paymentStatus">
+        <mat-header-cell *matHeaderCellDef>Payment</mat-header-cell>
+        <mat-cell *matCellDef="let o">
+          <span class="payment-badge {{ o.paymentStatus }}">{{ o.paymentStatus }}</span>
+        </mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="totalAmount">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Total</mat-header-cell>
+        <mat-cell *matCellDef="let o">{{ o.totalAmount | currency }}</mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="createdAt">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Date</mat-header-cell>
+        <mat-cell *matCellDef="let o">{{ o.createdAt | date:'mediumDate' }}</mat-cell>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef>Actions</mat-header-cell>
+        <mat-cell *matCellDef="let o">
+          <button mat-icon-button [routerLink]="['/tracking', o.orderNumber]" matTooltip="Track order">
+            <mat-icon>local_shipping</mat-icon>
+          </button>
+          <button mat-icon-button color="warn" (click)="deleteOrder(o)" matTooltip="Delete">
+            <mat-icon>delete</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
+
+      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+    </mat-table>
+    <mat-paginator [pageSizeOptions]="[10, 25, 50]" showFirstLastButtons></mat-paginator>
+  </div>
+</div>

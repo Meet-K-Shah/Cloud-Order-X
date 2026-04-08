@@ -1,0 +1,21 @@
+---
+# Shared variables across all hosts
+
+project_dir: "/opt/cloudorderx"
+docker_network: "cloudorderx-net"
+
+# Registry — update to your ECR URI
+docker_registry: "{{ lookup('env', 'AWS_ACCOUNT_ID') }}.dkr.ecr.us-east-1.amazonaws.com"
+image_tag: "{{ lookup('env', 'IMAGE_TAG') | default('latest') }}"
+
+backend_image:  "{{ docker_registry }}/cloudorderx-dev-backend:{{ image_tag }}"
+frontend_image: "{{ docker_registry }}/cloudorderx-dev-frontend:{{ image_tag }}"
+
+# Database connection (inject via Ansible Vault in prod)
+db_host: "{{ lookup('env', 'DB_HOST') }}"
+db_name: "cloudorderx"
+db_user: "cloudorderx"
+db_pass: "{{ lookup('env', 'DB_PASS') }}"
+
+# JWT secret (inject via Ansible Vault in prod)
+jwt_secret: "{{ lookup('env', 'JWT_SECRET') }}"

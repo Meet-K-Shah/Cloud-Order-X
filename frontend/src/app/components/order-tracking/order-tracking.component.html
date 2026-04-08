@@ -1,0 +1,74 @@
+<div class="page-container">
+  <div *ngIf="loading" class="loading-center">
+    <mat-spinner diameter="48"></mat-spinner>
+  </div>
+
+  <div *ngIf="error" class="error-state">
+    <mat-icon>error_outline</mat-icon>
+    <p>{{ error }}</p>
+    <button mat-button routerLink="/orders">Back to Orders</button>
+  </div>
+
+  <ng-container *ngIf="order && !loading">
+    <div class="tracking-header">
+      <button mat-icon-button routerLink="/orders"><mat-icon>arrow_back</mat-icon></button>
+      <div>
+        <h1>{{ order.orderNumber }}</h1>
+        <p class="subtitle">Real-time tracking • {{ order.createdAt | date:'medium' }}</p>
+      </div>
+      <span class="status-badge {{ order.status }}">{{ order.status }}</span>
+    </div>
+
+    <!-- Timeline -->
+    <div class="tracking-card">
+      <h3>Shipment Progress</h3>
+      <div class="timeline" *ngIf="order.status !== 'CANCELLED'">
+        <div class="step" *ngFor="let step of steps; let i = index"
+          [class.completed]="isCompleted(step)"
+          [class.active]="isActive(step)">
+          <div class="step-connector" *ngIf="i > 0"></div>
+          <div class="step-circle">
+            <mat-icon>{{ step.icon }}</mat-icon>
+          </div>
+          <div class="step-label">
+            <span class="label">{{ step.label }}</span>
+            <span class="desc">{{ step.description }}</span>
+          </div>
+        </div>
+      </div>
+      <div class="cancelled-banner" *ngIf="order.status === 'CANCELLED'">
+        <mat-icon>cancel</mat-icon> This order was cancelled.
+      </div>
+
+      <div class="tracking-number" *ngIf="order.trackingNumber">
+        <mat-icon>qr_code_scanner</mat-icon>
+        <div>
+          <p class="tn-label">Tracking Number</p>
+          <p class="tn-value">{{ order.trackingNumber }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Order Details -->
+    <div class="details-grid">
+      <div class="detail-card">
+        <h3>Customer Info</h3>
+        <p><strong>{{ order.customer.name }}</strong></p>
+        <p>{{ order.customer.email }}</p>
+        <p class="address">{{ order.shippingAddress }}</p>
+      </div>
+      <div class="detail-card">
+        <h3>Order Items</h3>
+        <div class="item-row" *ngFor="let item of order.items">
+          <span>{{ item.productName }}</span>
+          <span class="qty">×{{ item.quantity }}</span>
+          <span class="price">{{ item.subtotal | currency }}</span>
+        </div>
+        <div class="total-row">
+          <strong>Total</strong>
+          <strong>{{ order.totalAmount | currency }}</strong>
+        </div>
+      </div>
+    </div>
+  </ng-container>
+</div>

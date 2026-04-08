@@ -1,0 +1,15 @@
+# Rename this file to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars to version control — add it to .gitignore.
+
+aws_region   = "us-east-1"
+environment  = "dev"
+project_name = "cloudorderx"
+
+# Database — set a strong password
+db_password = "CHANGE_ME_STRONG_PASSWORD"
+db_multi_az = false
+
+# Compute
+backend_desired_count = 1
+backend_min_count     = 1
+backend_max_count     = 4
